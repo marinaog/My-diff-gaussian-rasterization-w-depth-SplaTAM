@@ -3,7 +3,7 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
@@ -132,14 +132,14 @@ __device__ void computeColorFromSH(int idx, int deg, int max_coeffs, const glm::
 	// Account for normalization of direction
 	float3 dL_dmean = dnormvdv(float3{ dir_orig.x, dir_orig.y, dir_orig.z }, float3{ dL_ddir.x, dL_ddir.y, dL_ddir.z });
 
-	// Gradients of loss w.r.t. Gaussian means, but only the portion 
+	// Gradients of loss w.r.t. Gaussian means, but only the portion
 	// that is caused because the mean affects the view-dependent color.
 	// Additional mean gradient is accumulated in below methods.
 	dL_dmeans[idx] += glm::vec3(dL_dmean.x, dL_dmean.y, dL_dmean.z);
 }
 
 // Backward version of INVERSE 2D covariance matrix computation
-// (due to length launched as separate kernel before other 
+// (due to length launched as separate kernel before other
 // backward steps contained in preprocess)
 __global__ void computeCov2DCUDA(int P,
 	const float3* means,
@@ -159,19 +159,19 @@ __global__ void computeCov2DCUDA(int P,
 	// Reading location of 3D covariance for this Gaussian
 	const float* cov3D = cov3Ds + 6 * idx;
 
-	// Fetch gradients, recompute 2D covariance and relevant 
+	// Fetch gradients, recompute 2D covariance and relevant
 	// intermediate forward results needed in the backward.
 	float3 mean = means[idx];
 	float3 dL_dconic = { dL_dconics[4 * idx], dL_dconics[4 * idx + 1], dL_dconics[4 * idx + 3] };
 	float3 t = transformPoint4x3(mean, view_matrix);
-	
+
 	const float limx = 1.3f * tan_fovx;
 	const float limy = 1.3f * tan_fovy;
 	const float txtz = t.x / t.z;
 	const float tytz = t.y / t.z;
 	t.x = min(limx, max(-limx, txtz)) * t.z;
 	t.y = min(limy, max(-limy, tytz)) * t.z;
-	
+
 	const float x_grad_mul = txtz < -limx || txtz > limx ? 0 : 1;
 	const float y_grad_mul = tytz < -limy || tytz > limy ? 0 : 1;
 
@@ -211,14 +211,14 @@ __global__ void computeCov2DCUDA(int P,
 		dL_dc = denom2inv * (-a * a * dL_dconic.z + 2 * a * b * dL_dconic.y + (denom - a * c) * dL_dconic.x);
 		dL_db = denom2inv * 2 * (b * c * dL_dconic.x - (denom + 2 * b * b) * dL_dconic.y + a * b * dL_dconic.z);
 
-		// Gradients of loss L w.r.t. each 3D covariance matrix (Vrk) entry, 
+		// Gradients of loss L w.r.t. each 3D covariance matrix (Vrk) entry,
 		// given gradients w.r.t. 2D covariance matrix (diagonal).
 		// cov2D = transpose(T) * transpose(Vrk) * T;
 		dL_dcov[6 * idx + 0] = (T[0][0] * T[0][0] * dL_da + T[0][0] * T[1][0] * dL_db + T[1][0] * T[1][0] * dL_dc);
 		dL_dcov[6 * idx + 3] = (T[0][1] * T[0][1] * dL_da + T[0][1] * T[1][1] * dL_db + T[1][1] * T[1][1] * dL_dc);
 		dL_dcov[6 * idx + 5] = (T[0][2] * T[0][2] * dL_da + T[0][2] * T[1][2] * dL_db + T[1][2] * T[1][2] * dL_dc);
 
-		// Gradients of loss L w.r.t. each 3D covariance matrix (Vrk) entry, 
+		// Gradients of loss L w.r.t. each 3D covariance matrix (Vrk) entry,
 		// given gradients w.r.t. 2D covariance matrix (off-diagonal).
 		// Off-diagonal elements appear twice --> double the gradient.
 		// cov2D = transpose(T) * transpose(Vrk) * T;
@@ -267,14 +267,14 @@ __global__ void computeCov2DCUDA(int P,
 	// t = transformPoint4x3(mean, view_matrix);
 	float3 dL_dmean = transformVec4x3Transpose({ dL_dtx, dL_dty, dL_dtz }, view_matrix);
 
-	// Gradients of loss w.r.t. Gaussian means, but only the portion 
+	// Gradients of loss w.r.t. Gaussian means, but only the portion
 	// that is caused because the mean affects the covariance matrix.
 	// Additional mean gradient is accumulated in BACKWARD::preprocess.
 	dL_dmeans[idx] = dL_dmean;
 }
 
-// Backward pass for the conversion of scale and rotation to a 
-// 3D covariance matrix for each Gaussian. 
+// Backward pass for the conversion of scale and rotation to a
+// 3D covariance matrix for each Gaussian.
 __device__ void computeCov3D(int idx, const glm::vec3 scale, float mod, const glm::vec4 rot, const float* dL_dcov3Ds, glm::vec3* dL_dscales, glm::vec4* dL_drots)
 {
 	// Recompute (intermediate) results for the 3D covariance computation.
@@ -412,7 +412,8 @@ renderCUDA(
 	float3* __restrict__ dL_dmean2D,
 	float4* __restrict__ dL_dconic2D,
 	float* __restrict__ dL_dopacity,
-	float* __restrict__ dL_dcolors)
+	float* __restrict__ dL_dcolors,
+	float alpha_threshold)
 {
 	// We rasterize again. Compute necessary block info.
 	auto block = cg::this_thread_block();
@@ -437,7 +438,7 @@ renderCUDA(
 	__shared__ float collected_colors[C * BLOCK_SIZE];
 
 	// In the forward, we stored the final value for T, the
-	// product of all (1 - alpha) factors. 
+	// product of all (1 - alpha) factors.
 	const float T_final = inside ? final_Ts[pix_id] : 0;
 	float T = T_final;
 
@@ -455,7 +456,7 @@ renderCUDA(
 	float last_alpha = 0;
 	float last_color[C] = { 0 };
 
-	// Gradient of pixel coordinate w.r.t. normalized 
+	// Gradient of pixel coordinate w.r.t. normalized
 	// screen-space viewport corrdinates (-1 to 1)
 	const float ddelx_dx = 0.5 * W;
 	const float ddely_dy = 0.5 * H;
@@ -497,7 +498,7 @@ renderCUDA(
 
 			const float G = exp(power);
 			const float alpha = min(0.99f, con_o.w * G);
-			if (alpha < 1.0f / 255.0f)
+			if (alpha < alpha_threshold)
 				continue;
 
 			T = T / (1.f - alpha);
@@ -517,7 +518,7 @@ renderCUDA(
 
 				const float dL_dchannel = dL_dpixel[ch];
 				dL_dalpha += (c - accum_rec[ch]) * dL_dchannel;
-				// Update the gradients w.r.t. color of the Gaussian. 
+				// Update the gradients w.r.t. color of the Gaussian.
 				// Atomic, since this pixel is just one of potentially
 				// many that were affected by this Gaussian.
 				atomicAdd(&(dL_dcolors[global_id * C + ch]), dchannel_dcolor * dL_dchannel);
@@ -580,10 +581,10 @@ void BACKWARD::preprocess(
 	glm::vec3* dL_dscale,
 	glm::vec4* dL_drot)
 {
-	// Propagate gradients for the path of 2D conic matrix computation. 
-	// Somewhat long, thus it is its own kernel rather than being part of 
+	// Propagate gradients for the path of 2D conic matrix computation.
+	// Somewhat long, thus it is its own kernel rather than being part of
 	// "preprocess". When done, loss gradient w.r.t. 3D means has been
-	// modified and gradient w.r.t. 3D covariance matrix has been computed.	
+	// modified and gradient w.r.t. 3D covariance matrix has been computed.
 	computeCov2DCUDA << <(P + 255) / 256, 256 >> > (
 		P,
 		means3D,
@@ -636,7 +637,8 @@ void BACKWARD::render(
 	float3* dL_dmean2D,
 	float4* dL_dconic2D,
 	float* dL_dopacity,
-	float* dL_dcolors)
+	float* dL_dcolors,
+	float alpha_threshold)
 {
 	renderCUDA<NUM_CHANNELS> << <grid, block >> >(
 		ranges,
@@ -652,6 +654,7 @@ void BACKWARD::render(
 		dL_dmean2D,
 		dL_dconic2D,
 		dL_dopacity,
-		dL_dcolors
+		dL_dcolors,
+		alpha_threshold
 		);
 }

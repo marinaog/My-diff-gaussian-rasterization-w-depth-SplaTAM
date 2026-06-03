@@ -217,7 +217,8 @@ int CudaRasterizer::Rasterizer::forward(
 	const bool prefiltered,
 	float* out_color,
 	float* out_depth,
-	int* radii)
+	int* radii,
+	float alpha_threshold)
 {
 	const float focal_y = height / (2.0f * tan_fovy);
 	const float focal_x = width / (2.0f * tan_fovx);
@@ -333,7 +334,8 @@ int CudaRasterizer::Rasterizer::forward(
 		background,
 		out_color,
 		geomState.depths,
-		out_depth);
+		out_depth,
+		alpha_threshold);
 
 	return num_rendered;
 }
@@ -368,7 +370,8 @@ void CudaRasterizer::Rasterizer::backward(
 	float* dL_dcov3D,
 	float* dL_dsh,
 	float* dL_dscale,
-	float* dL_drot)
+	float* dL_drot,
+	float alpha_threshold)
 {
 	GeometryState geomState = GeometryState::fromChunk(geom_buffer, P);
 	BinningState binningState = BinningState::fromChunk(binning_buffer, R);
@@ -405,7 +408,8 @@ void CudaRasterizer::Rasterizer::backward(
 		(float3*)dL_dmean2D,
 		(float4*)dL_dconic,
 		dL_dopacity,
-		dL_dcolor);
+		dL_dcolor,
+		alpha_threshold);
 
 	// Take care of the rest of preprocessing. Was the precomputed covariance
 	// given to us or a scales/rot pair? If precomputed, pass that. If not,

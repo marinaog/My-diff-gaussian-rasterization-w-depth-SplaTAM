@@ -50,7 +50,8 @@ namespace CudaRasterizer
 			const bool prefiltered,
 			float* out_color,
 			float* out_depth,
-			int* radii = nullptr);
+			int* radii = nullptr,
+			float alpha_threshold = 1.0f / 255.0f);
 
 		static void backward(
 			const int P, int D, int M, int R,
@@ -80,7 +81,8 @@ namespace CudaRasterizer
 			float* dL_dcov3D,
 			float* dL_dsh,
 			float* dL_dscale,
-			float* dL_drot);
+			float* dL_drot,
+			float alpha_threshold = 1.0f / 255.0f);
 	};
 };
 
